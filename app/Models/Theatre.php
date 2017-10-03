@@ -7,4 +7,6 @@ class Theatre extends Model {
     
     protected $table = 'theatre';
 
+    
+
 }
