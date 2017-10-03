@@ -56,6 +56,7 @@ class ScrapeController extends Controller {
                 $theatre->city_id   = $city_id;
                 $theatre->ori_id    = $ori_id;
                 $theatre->code      = str_replace(".htm", "", $code);
+
                 $theatre->slug      = str_replace("/theater/", "", $slug);
                 $theatre->name      = $name;
                 $theatre->cnpx_link = $cnpx_link;
@@ -64,6 +65,13 @@ class ScrapeController extends Controller {
                 $theatre->lat       = 0;
                 $theatre->lng       = 0;
                 $theatre->save();
+
+                $city       = City::where('ori_id', $city_id)->first();
+                if(empty($city->code)){
+                    $city_code          = substr($theatre->code, 0, 3);
+                    $city->code         = $city_code;
+                    $city->save();
+                }
             }
         });
 
