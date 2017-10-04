@@ -181,8 +181,9 @@ class ScrapeController extends Controller {
         $jf                 = explode('         ', $wraptextarr[4]);
         $movie->category    =  trim(str_replace('Jenis Film : ', '', $jf[0]));
         $movie->producer    =  trim(str_replace('Jenis Film : ', '', $jf[2]));
-        $movie->author      =  trim(str_replace('Penulis    : ', '', $wraptextarr[6));
-        $movie->author      =  trim(str_replace('Produksi    :  ', '', $wraptextarr[7));
+        $movie->director    =  trim(str_replace('Sutradara    : ', '', $wraptextarr[5]));
+        $movie->author      =  trim(str_replace('Penulis    : ', '', $wraptextarr[6]));
+        $movie->production_house      =  trim(str_replace('Produksi    :  ', '', $wraptextarr[7]));
         dd($wraptextarr);
 
 
