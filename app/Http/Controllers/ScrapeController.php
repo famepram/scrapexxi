@@ -154,21 +154,50 @@ class ScrapeController extends Controller {
             $movie->casts               = '';
             $movie->cover               = '';
             $movie->trailer_link        = '';
+            //dd($movie);
+            $this->updateDetail($movie);
+
+
             $movie->save();
         }
     }
 
     public function updateDetail($movie){
         $client         = new Client();
-        $crawler        = $client->request('GET', $movie->cnpx_link);
+        $crawler        = $client->request('GET', $movie->cnpxlink);
         $contentdiv     = $crawler->filter('#content');
+
         $img            = $contentdiv->filter('img')->eq(0)->attr('src');
         $movie->cover   = $img;
         $durasi         = $contentdiv->filter('span.duration')->text();
-        $wraptext       = $contentdiv->filter('.col-m_392');
+        $wraptext       = $contentdiv->filter('.col-m_392')->eq(0);
         $movinfo        = $contentdiv->filter('.movinfo')->text();
         
+        $wraptextarr    = $this->convertWraptext($wraptext);
+        $movie->duration    = (int) str_replace('minutes', '', $wraptextarr[2]);
+        $movie->mtix_code   = substr(strstr($wraptextarr[3], ':'),1);
+        $movie->synopsis    = $wraptextarr[9];
 
+        $jf                 = explode('         ', $wraptextarr[4]);
+        $movie->category    =  trim(str_replace('Jenis Film : ', '', $jf[0]));
+        $movie->producer    =  trim(str_replace('Jenis Film : ', '', $jf[2]));
+        $movie->author      =  trim(str_replace('Penulis    : ', '', $wraptextarr[6));
+        $movie->author      =  trim(str_replace('Produksi    :  ', '', $wraptextarr[7));
+        dd($wraptextarr);
+
+
+    }
+
+    private function convertWraptext($wraptext){
+        $return = array();
+        $wraptextarr    = preg_split('/\n|\r\n?/', $wraptext->text());
+        foreach ($wraptextarr as  $value) {
+            $v = trim($value);
+            if(!empty($v)){
+                $return[] = $v;
+            }
+        }
+        return $return;
     }
 
     public function updateSchedule($node,$theatre_id){
