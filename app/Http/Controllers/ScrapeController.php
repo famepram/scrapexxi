@@ -3,6 +3,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\City;
+use App\Models\Movie;
+use App\Models\Schedule;
 use App\Models\Theatre;
 use Goutte\Client;
 use GuzzleHttp\Exception\GuzzleException;
@@ -84,8 +86,8 @@ class ScrapeController extends Controller {
         $url = 'http://www.21cineplex.com/nowplaying';
         $client     = new Client();
         $crawler    = $client->request('GET', $url);
-        $lis        = $crawler->filter('.col-content ul.white')->first()->filter('li');
-        //dd($lis->count());
+        $lis        = $crawler->filter('#makan');
+        dd($lis->count());
         $lis->each(function($node,$i){
             // $link       = $node->filter('a')->link()->getUri();
             // $path       = str_replace(".htm", "",end(explode('/', rtrim($link, '/'))));
@@ -102,44 +104,153 @@ class ScrapeController extends Controller {
     }
 
     public function scrapMovie(){
-        $cities = City::all();
-        $url    = 'http://www.21cineplex.com/page/ajax-movie-list.php';
-        $headers = [
-            'headers' => [
-                'User-Agent' => 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36',
-                'Accept'     => '*/*',
-                'Content-Type' => 'application/x-www-form-urlencoded; charset=UTF-8',
-                'Origin'     => 'http://www.21cineplex.com',
-                'Host'       => 'www.21cineplex.com',
-                'Referer'    => 'http://www.21cineplex.com/',
-                'Cookie'     => 'PHPSESSID=f5bb0ac257013967cb939c78d80349a0; fullsite=1; __gads=ID=32a77cbea177b0db:T=1506956456:S=ALNI_Ma1H7FYk2u3mIAdIq7xd9_NUnExmA; scks_th=2; scks_npx=1; scks_home=1; __atuvc=5%7C40; __atuvs=59d3ba8292acd26e001; kota=26; __utma=117930442.583593974.1506956450.1506958426.1507045903.3; __utmb=117930442.52.10.1507045903; __utmc=117930442; __utmz=117930442.1506956450.1.1.utmcsr=(direct)|utmccn=(direct)|utmcmd=(none)',   
-                'X-Requested-With' => 'XMLHttpRequest'
-            ]
-        ];
-        foreach ($cities as  $city) {
-            $client = new GuzzleClient();
-            $result = $client->post($url, [
-                'form_params' => [
-                    'scid' => $city->ori_id,
-                    'st'=>1
+        $theatres = Theatre::all();
+        foreach ($theatres as  $thea) {
+            $client     = new Client();
+            $crawler    = $client->request('GET', $thea->getDetailURL());
+            $crawler
+            ->filter('#makan > table')
+            ->each(function ($node,$i) use($thea){
+                $node->filter('tr')->each(function($node, $i){
+                    if($i > 0){
+                        $this->updateNewMovie($node);
+                        $this->updateSchedule($node,$thea->ori_id);
+                    }
+                });
+            });
+        } 
+    }
 
-                ]
-            ]);
-            // echo $result->getHeader('content-type');
-            // echo '<br />';
-            // 'application/json; charset=utf8'
-            $d =  $result->getBody();
-            dd($d);
-            //echo '<br />';
-            //echo '----------------------------------------------------------------------';
+    private function updateNewMovie($node){
+        $tdanchor       = $node->filter('td > a')->eq(0);
+        $title          = $node->filter('td')->text();
+        $tdlink         = $tdanchor->link()->getUri();
+        $page_url       = parse_url($tdlink,PHP_URL_PATH);
+        $exp_pg_url     = explode(',', $page_url);
+        $slug           = substr($exp_pg_url[0], 1);
+        $ori_id         = $exp_pg_url[1];
+        $code           = $exp_pg_url[2];
 
+        $strrate        = $node->filter('td')->eq(2)->filter('span')->attr('title');                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+        $rate           = $this->getRating($strrate);
 
-            // $url        = $city->generateNPURL();
-            // dd($url);
-            // $client     = new Client();
-            // $crawler    = $client->request('GET', $url);
-            // $list       = $crawler->filter('#mvlist');
-            // dd($list->count());
+        $count          = Movie::where('ori_id', $ori_id)->count();
+        if(empty($count)){
+            $movie              = new Movie;
+            $movie->ori_id      = $ori_id;
+            $movie->title       = $title;
+            $movie->code        = str_replace(".htm", "", $code);
+            $movie->slug        = $slug;
+            $movie->rate_id     = $rate;
+            $movie->cnpxlink    = $tdlink;
+
+            $movie->synopsis            = '';
+            $movie->mtix_code           = '';
+            $movie->category            = '';
+            $movie->producer            = '';
+            $movie->director            = '';
+            $movie->author              = '';
+            $movie->production_house    = '';
+            $movie->casts               = '';
+            $movie->cover               = '';
+            $movie->trailer_link        = '';
+            $movie->save();
         }
+    }
+
+    public function updateDetail($movie){
+        $client         = new Client();
+        $crawler        = $client->request('GET', $movie->cnpx_link);
+        $contentdiv     = $crawler->filter('#content');
+        $img            = $contentdiv->filter('img')->eq(0)->attr('src');
+        $movie->cover   = $img;
+        $durasi         = $contentdiv->filter('span.duration')->text();
+        $wraptext       = $contentdiv->filter('.col-m_392');
+        $movinfo        = $contentdiv->filter('.movinfo')->text();
+        
+
+    }
+
+    public function updateSchedule($node,$theatre_id){
+        $where          = ['movie_id'=> $movie_ori_id, 'theatre_id'=>$theatre_id, 'date'=> date('Y-m-d')];
+        $count          = Schedule::where($where)->count();
+        if(empty($count)){
+            $tdanchor       = $node->filter('td > a')->eq(0);
+            $page_url       = parse_url($tdlink,PHP_URL_PATH);
+            $exp_pg_url     = explode(',', $page_url);
+            $movie_ori_id   = $exp_pg_url[1];
+
+            $strShowTime    = $node->filter('td')->eq(1)->text();
+            $expShowTime    = explode(' ', $strShowTime);
+            if(!empty($expShowTime)){
+                foreach ($expShowTime as $showtime) {
+                    $schedule   = new Schedule;
+                    $schedule->ori_id       = 0;
+                    $schedule->theatre_id   = $theatre_id;
+                    $schedule->movie_id     = $movie_ori_id;
+                    $schedule->date         = date('Y-m-d');
+                    $schedule->showtime     = $showtime;
+                    $schedule->save();
+                }
+            }
+        }
+    }
+    
+    private function getRating($rate){
+        switch (strtolower($rate)) {
+            case 'semua umur':
+                return 1;
+            case 'remaja':
+                return 2;  
+            case 'dewasa 17+':
+                return 3;              
+            default:
+                return 1;
+        }
+    }
+    
+
+
+
+    private function doCURL($city_ori_id){
+        $ch =  curl_init();
+        $url        = 'http://www.21cineplex.com/page/ajax-movie-list.php';
+        curl_setopt( $ch, CURLOPT_URL, $url );
+        $useragent  = 'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36';
+        curl_setopt( $ch, CURLOPT_USERAGENT, $useragent );
+
+        $headers = array();
+        $headers[] = 'Accept: */*';
+        $headers[] = 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8';
+        $headers[] = 'Host: www.21cineplex.com';
+        $headers[] = 'Origin: http://www.21cineplex.com';
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+        $cookie = '__gads=ID=723392b129440c0a:T=1506571393:S=ALNI_MZIi7nwVyjzaJejDdVVOSL_7Tf-mg; __atuvc=1%7C39%2C8%7C40; fullsite=1; PHPSESSID=60f6bb33bfdd41055c544de393e3e7ab; scks_home=1; __utmt=1; __utmt_UA-1473696-2=1; __utma=117930442.1168680518.1506571324.1507024605.1507083253.9; __utmb=117930442.2.10.1507083253; __utmc=117930442; __utmz=117930442.1506672181.2.2.utmcsr=google|utmccn=(organic)|utmcmd=organic|utmctr=(not%20provided); kota=77';
+        curl_setopt($ch, CURLOPT_COOKIE, $cookie);
+        
+        
+        curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
+        curl_setopt( $ch, CURLOPT_FOLLOWLOCATION, true );
+        curl_setopt( $ch, CURLOPT_AUTOREFERER, true );
+        curl_setopt( $ch, CURLOPT_FOLLOWLOCATION, true );
+
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_SAFE_UPLOAD, false);
+
+        $data = array('cid' => $city_ori_id,'st'=>1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+        curl_setopt( $ch, CURLOPT_REFERER, 'http://www.21cineplex.com/' );
+        
+        curl_setopt( $ch, CURLOPT_CONNECTTIMEOUT,5 );
+        curl_setopt($ch, CURLOPT_VERBOSE, true);
+
+
+        $result = curl_exec( $ch );
+        $info = curl_getinfo($ch);
+
+        curl_close( $ch );
+        //var_dump($info);
+        die(var_dump($result));
     }
 }
