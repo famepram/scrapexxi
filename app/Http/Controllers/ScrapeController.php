@@ -113,7 +113,7 @@ class ScrapeController extends Controller {
             $crawler
             ->filter('#makan > table')
             ->each(function ($node,$i) use($thea){
-                $node->filter('tr')->each(function($node, $i){
+                $node->filter('tr')->each(function($node, $i) use($thea) {
                     if($i > 0){
                         $this->updateNewMovie($node);
                         $this->updateSchedule($node,$thea->ori_id);
@@ -144,16 +144,17 @@ class ScrapeController extends Controller {
             $movie->code            = str_replace(".htm", "", $code);
             $movie->slug            = $slug;
             $movie->rate_id         = $rate;
-            $movie->cnpxlink        = $tdlink;
+            $movie->cnpx_link       = $tdlink;
             $movie->trailer_link    = '';
             $movie = $this->updateDetail($movie);
+            //dd($movie);
             $movie->save();
         }
     }
 
     public function updateDetail($movie){
         $client                         = new Client();
-        $crawler                        = $client->request('GET', $movie->cnpxlink);
+        $crawler                        = $client->request('GET', $movie->cnpx_link);
         $contentdiv                     = $crawler->filter('#content');
 
         $img                            = $contentdiv->filter('img')->eq(0)->attr('src');
@@ -175,6 +176,7 @@ class ScrapeController extends Controller {
         $movie->author                  =  $this->cleanTitikdua($wraptextarr[6]);
         $movie->production_house        =  $this->cleanTitikdua($wraptextarr[7]);
         $movie->casts                   =  $this->getListCasts($wraptext);
+        $movie->trailer_link            = $this->getTrailerLink($contentdiv);
         return $movie;
     }
 
@@ -227,6 +229,15 @@ class ScrapeController extends Controller {
                 }
             }
         }
+    }
+
+    private function getTrailerLink($contentdiv){
+        $pagelink = $contentdiv->filter('.detmov-side span.three-nav a')->eq(2)->link()->getUri();
+        $client                         = new Client();
+        $crawler                        = $client->request('GET', $pagelink);
+        $vidlink                        = $crawler->filterXpath('//meta[@name="twitter:player:stream"]')->attr('content');
+        return $vidlink;
+
     }
     
     private function getRating($rate){
