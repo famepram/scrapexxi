@@ -156,8 +156,8 @@ class ScrapeController extends Controller {
             $movie->trailer_link        = '';
             //dd($movie);
             $this->updateDetail($movie);
-
-
+            $movie = $this->updateDetail($movie);
+            
             $movie->save();
         }
     }
@@ -179,14 +179,14 @@ class ScrapeController extends Controller {
         $movie->synopsis    = $wraptextarr[9];
 
         $jf                 = explode('         ', $wraptextarr[4]);
-        $movie->category    =  trim(str_replace('Jenis Film : ', '', $jf[0]));
-        $movie->producer    =  trim(str_replace('Jenis Film : ', '', $jf[2]));
-        $movie->director    =  trim(str_replace('Sutradara    : ', '', $wraptextarr[5]));
-        $movie->author      =  trim(str_replace('Penulis    : ', '', $wraptextarr[6]));
-        $movie->production_house      =  trim(str_replace('Produksi    :  ', '', $wraptextarr[7]));
-        dd($wraptextarr);
-
-
+        //dd($jf);
+        $movie->category                =  $this->cleanTitikdua($jf[0]);
+        $movie->producer                =  $this->cleanTitikdua($jf[1]);
+        $movie->director                =  $this->cleanTitikdua($wraptextarr[5]);
+        $movie->author                  =  $this->cleanTitikdua($wraptextarr[6]);
+        $movie->production_house        =  $this->cleanTitikdua($wraptextarr[7]);
+        $movie->casts                   =  $this->getListCasts($wraptext);
+        return $movie;
     }
 
     private function convertWraptext($wraptext){
@@ -199,6 +199,25 @@ class ScrapeController extends Controller {
             }
         }
         return $return;
+    }
+
+    private function getListCasts($wraptext){
+        //$lis        = $wraptext->filter('.cast li');
+        //dd($lis->count());
+        $movie    = array();
+        $wraptext->filter('.cast li')->each(function($node, $i){
+            global $arrlist;
+            $p          = $node->text();
+            $arrlist[]  = $p;
+        });
+
+        dd($arrlist);
+
+    }
+
+    private function cleanTitikdua($string){
+        $arr = explode(':',$string);
+        return trim($arr[1]);
     }
 
     public function updateSchedule($node,$theatre_id){
