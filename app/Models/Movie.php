@@ -7,4 +7,7 @@ class Movie extends Model {
     
     protected $table = 'movie';
 
+    public $castList = array();
+
+
 }

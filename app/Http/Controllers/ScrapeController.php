@@ -20,6 +20,8 @@ class ScrapeController extends Controller {
      * @param  int  $id
      * @return Response
      */
+    var $castlist = array();
+
     public function scrapeCity(){
         $client = new Client();
         $crawler = $client->request('GET', 'http://www.21cineplex.com/theaters');
@@ -136,49 +138,36 @@ class ScrapeController extends Controller {
 
         $count          = Movie::where('ori_id', $ori_id)->count();
         if(empty($count)){
-            $movie              = new Movie;
-            $movie->ori_id      = $ori_id;
-            $movie->title       = $title;
-            $movie->code        = str_replace(".htm", "", $code);
-            $movie->slug        = $slug;
-            $movie->rate_id     = $rate;
-            $movie->cnpxlink    = $tdlink;
-
-            $movie->synopsis            = '';
-            $movie->mtix_code           = '';
-            $movie->category            = '';
-            $movie->producer            = '';
-            $movie->director            = '';
-            $movie->author              = '';
-            $movie->production_house    = '';
-            $movie->casts               = '';
-            $movie->cover               = '';
-            $movie->trailer_link        = '';
-            //dd($movie);
-            $this->updateDetail($movie);
+            $movie                  = new Movie;
+            $movie->ori_id          = $ori_id;
+            $movie->title           = $title;
+            $movie->code            = str_replace(".htm", "", $code);
+            $movie->slug            = $slug;
+            $movie->rate_id         = $rate;
+            $movie->cnpxlink        = $tdlink;
+            $movie->trailer_link    = '';
             $movie = $this->updateDetail($movie);
-            
             $movie->save();
         }
     }
 
     public function updateDetail($movie){
-        $client         = new Client();
-        $crawler        = $client->request('GET', $movie->cnpxlink);
-        $contentdiv     = $crawler->filter('#content');
+        $client                         = new Client();
+        $crawler                        = $client->request('GET', $movie->cnpxlink);
+        $contentdiv                     = $crawler->filter('#content');
 
-        $img            = $contentdiv->filter('img')->eq(0)->attr('src');
-        $movie->cover   = $img;
-        $durasi         = $contentdiv->filter('span.duration')->text();
-        $wraptext       = $contentdiv->filter('.col-m_392')->eq(0);
-        $movinfo        = $contentdiv->filter('.movinfo')->text();
+        $img                            = $contentdiv->filter('img')->eq(0)->attr('src');
+        $movie->cover                   = $img;
+        $durasi                         = $contentdiv->filter('span.duration')->text();
+        $wraptext                       = $contentdiv->filter('.col-m_392')->eq(0);
+        $movinfo                        = $contentdiv->filter('.movinfo')->text();
         
-        $wraptextarr    = $this->convertWraptext($wraptext);
-        $movie->duration    = (int) str_replace('minutes', '', $wraptextarr[2]);
-        $movie->mtix_code   = substr(strstr($wraptextarr[3], ':'),1);
-        $movie->synopsis    = $wraptextarr[9];
+        $wraptextarr                    = $this->convertWraptext($wraptext);
+        $movie->duration                = (int) str_replace('minutes', '', $wraptextarr[2]);
+        $movie->mtix_code               = substr(strstr($wraptextarr[3], ':'),1);
+        $movie->synopsis                = $wraptextarr[9];
 
-        $jf                 = explode('         ', $wraptextarr[4]);
+        $jf                             = explode('         ', $wraptextarr[4]);
         //dd($jf);
         $movie->category                =  $this->cleanTitikdua($jf[0]);
         $movie->producer                =  $this->cleanTitikdua($jf[1]);
@@ -202,17 +191,12 @@ class ScrapeController extends Controller {
     }
 
     private function getListCasts($wraptext){
-        //$lis        = $wraptext->filter('.cast li');
-        //dd($lis->count());
-        $movie    = array();
-        $wraptext->filter('.cast li')->each(function($node, $i){
-            global $arrlist;
-            $p          = $node->text();
-            $arrlist[]  = $p;
+        $wraptext->filter('.cast li')->each(function($node, $i){ 
+            $p                      = $node->text();
+            $this->castlist[]       = $p;
         });
-
-        dd($arrlist);
-
+        $castlist_str = implode(', ', $this->castlist);
+        return $castlist_str;
     }
 
     private function cleanTitikdua($string){
