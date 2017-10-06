@@ -20,4 +20,5 @@ Route::prefix('scrape')->group(function() {
     Route::get('theatre', 'ScrapeController@scrapeTheatre')->name('scrape.theatre');
     Route::get('city/code', 'ScrapeController@scrapCityCode')->name('scrape.city.code');
     Route::get('movie', 'ScrapeController@scrapMovie')->name('scrape.movie');
+    Route::get('htm', 'ScrapeController@scrapHTM')->name('scrape.htm');
 });

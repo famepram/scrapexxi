@@ -3,6 +3,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\City;
+use App\Models\Htm;
 use App\Models\Movie;
 use App\Models\Schedule;
 use App\Models\Theatre;
@@ -115,41 +116,80 @@ class ScrapeController extends Controller {
             ->each(function ($node,$i) use($thea){
                 $node->filter('tr')->each(function($node, $i) use($thea) {
                     if($i > 0){
-                        $this->updateNewMovie($node);
-                        $this->updateSchedule($node,$thea->ori_id);
+                        $movie_ori_id = $this->updateNewMovie($node);
+                        $this->updateSchedule($node,$movie_ori_id, $thea->ori_id);
                     }
                 });
             });
         } 
     }
 
+    public function scrapHTM(){
+        $theatres = Theatre::all();
+        foreach ($theatres as  $thea) {
+            $client     = new Client();
+            $crawler    = $client->request('GET', $thea->getDetailURL());
+            $divs       = $crawler->filter('table')->eq(1)->filter('tr')->eq(1)->filter('td')->eq(2);
+            //$divs       = $crawler->filter('table')->eq(0)->filter('tr:eq(1) > td:eq(2) > div');
+            $text   = preg_replace('/\n|\r\n?/',"",$divs->text());
+            $text   = str_replace('000',"000,",$text);
+            $arr    = explode(',', $text);
+            if(!empty($arr)){
+                foreach ($arr as  $item) {
+                    //echo $item.'-----------<br/>';
+                    $expitem    = explode('Rp', $item);
+                    $daystr     = trim(str_replace('.', '', $expitem[0]));
+                    $rp         = isset($expitem[1]) ? $expitem[1] : 0; 
+                    $rp         = (int) str_replace('.', '', $rp); 
+
+                    $htm        = new Htm;
+                    $htm->theatre_id    = $thea->ori_id;
+                    $htm->day           = 0;
+                    $htm->daystr        = $daystr;
+                    $htm->price         = $rp;
+                    $htm->save();
+                    // var_dump(trim(str_replace('�', '', $daystr)));
+                    echo trim($thea->getDetailURL()).'--------------'.$rp.'----------<br/>';
+
+                }
+            }
+
+        }
+    }
+
     private function updateNewMovie($node){
         $tdanchor       = $node->filter('td > a')->eq(0);
         $title          = $node->filter('td')->text();
-        $tdlink         = $tdanchor->link()->getUri();
-        $page_url       = parse_url($tdlink,PHP_URL_PATH);
-        $exp_pg_url     = explode(',', $page_url);
-        $slug           = substr($exp_pg_url[0], 1);
-        $ori_id         = $exp_pg_url[1];
-        $code           = $exp_pg_url[2];
+        if($tdanchor->count() > 0){
+            $tdlink         = $tdanchor->link()->getUri();
+            $page_url       = parse_url($tdlink,PHP_URL_PATH);
+            $exp_pg_url     = explode(',', $page_url);
+            $slug           = substr($exp_pg_url[0], 1);
+            $ori_id         = $exp_pg_url[1];
+            $code           = $exp_pg_url[2];
 
-        $strrate        = $node->filter('td')->eq(2)->filter('span')->attr('title');                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
-        $rate           = $this->getRating($strrate);
+            $strrate        = $node->filter('td')->eq(2)->filter('span')->attr('title');                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+            $rate           = $this->getRating($strrate);
 
-        $count          = Movie::where('ori_id', $ori_id)->count();
-        if(empty($count)){
-            $movie                  = new Movie;
-            $movie->ori_id          = $ori_id;
-            $movie->title           = $title;
-            $movie->code            = str_replace(".htm", "", $code);
-            $movie->slug            = $slug;
-            $movie->rate_id         = $rate;
-            $movie->cnpx_link       = $tdlink;
-            $movie->trailer_link    = '';
-            $movie = $this->updateDetail($movie);
-            //dd($movie);
-            $movie->save();
+            $count          = Movie::where('ori_id', $ori_id)->count();
+            if(empty($count)){
+                $movie                  = new Movie;
+                $movie->ori_id          = $ori_id;
+                $movie->title           = $title;
+                $movie->code            = str_replace(".htm", "", $code);
+                $movie->slug            = $slug;
+                $movie->rate_id         = $rate;
+                $movie->cnpx_link       = $tdlink;
+                $movie->trailer_link    = '';
+                $movie = $this->updateDetail($movie);
+                //dd($movie);
+                $movie->save();
+            }
+            return $ori_id;
+        } else {
+            return "";
         }
+        
     }
 
     public function updateDetail($movie){
@@ -176,7 +216,7 @@ class ScrapeController extends Controller {
         $movie->author                  =  $this->cleanTitikdua($wraptextarr[6]);
         $movie->production_house        =  $this->cleanTitikdua($wraptextarr[7]);
         $movie->casts                   =  $this->getListCasts($wraptext);
-        $movie->trailer_link            = $this->getTrailerLink($contentdiv);
+        $movie->trailer_link            =  $this->getTrailerLink($contentdiv);
         return $movie;
     }
 
@@ -206,12 +246,12 @@ class ScrapeController extends Controller {
         return trim($arr[1]);
     }
 
-    public function updateSchedule($node,$theatre_id){
+    public function updateSchedule($node,$movie_ori_id, $theatre_id){
         $where          = ['movie_id'=> $movie_ori_id, 'theatre_id'=>$theatre_id, 'date'=> date('Y-m-d')];
         $count          = Schedule::where($where)->count();
-        if(empty($count)){
+        if(empty($count) && !empty($movie_ori_id)){
             $tdanchor       = $node->filter('td > a')->eq(0);
-            $page_url       = parse_url($tdlink,PHP_URL_PATH);
+            $page_url       = parse_url($tdanchor->link()->getUri(),PHP_URL_PATH);
             $exp_pg_url     = explode(',', $page_url);
             $movie_ori_id   = $exp_pg_url[1];
 
@@ -219,12 +259,13 @@ class ScrapeController extends Controller {
             $expShowTime    = explode(' ', $strShowTime);
             if(!empty($expShowTime)){
                 foreach ($expShowTime as $showtime) {
+                    $showtime   = substr($showtime, 0,5); 
                     $schedule   = new Schedule;
                     $schedule->ori_id       = 0;
                     $schedule->theatre_id   = $theatre_id;
                     $schedule->movie_id     = $movie_ori_id;
                     $schedule->date         = date('Y-m-d');
-                    $schedule->showtime     = $showtime;
+                    $schedule->showtime     = $showtime.":00";
                     $schedule->save();
                 }
             }
@@ -232,11 +273,17 @@ class ScrapeController extends Controller {
     }
 
     private function getTrailerLink($contentdiv){
-        $pagelink = $contentdiv->filter('.detmov-side span.three-nav a')->eq(2)->link()->getUri();
-        $client                         = new Client();
-        $crawler                        = $client->request('GET', $pagelink);
-        $vidlink                        = $crawler->filterXpath('//meta[@name="twitter:player:stream"]')->attr('content');
-        return $vidlink;
+        $pageanchor = $contentdiv->filter('.detmov-side span.three-nav a');
+        if($pageanchor->count() > 0){
+            $pagelink      = $pageanchor->eq(2)->link()->getUri();
+            $client                         = new Client();
+            $crawler                        = $client->request('GET', $pagelink);
+            $vidlink                        = $crawler->filterXpath('//meta[@name="twitter:player:stream"]')->attr('content');
+            return $vidlink;
+        } else {
+            return '';
+        }
+        
 
     }
     
